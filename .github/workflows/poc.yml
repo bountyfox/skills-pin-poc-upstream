@@ -1,0 +1,45 @@
+name: h1-4169727 e2e poc
+on: workflow_dispatch
+
+jobs:
+  poc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: upstream
+
+      - name: Checkout vercel-labs/skills at the audited/current commit (unmodified)
+        uses: actions/checkout@v4
+        with:
+          repository: vercel-labs/skills
+          ref: 9197d919034d19010ae303cf96bf19ad087dd4be
+          path: skills-src
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable pnpm (the vendor repo's declared package manager) via corepack
+        run: corepack enable
+
+      - name: pnpm install --frozen-lockfile (real, unmodified vendor deps/lockfile)
+        working-directory: skills-src
+        run: pnpm install --frozen-lockfile
+
+      - name: Snapshot the curated (pre-tamper) state as a git worktree
+        working-directory: upstream
+        run: |
+          git worktree add /tmp/curated 4b3bc7e906573fb2337ebc57053f710b229efa31
+
+      - name: Copy driver into the vendor checkout so relative imports resolve
+        run: cp upstream/driver.mjs skills-src/driver.mjs
+
+      - name: Run end-to-end PoC driver against the real, unmodified CLI source
+        working-directory: skills-src
+        env:
+          POC_REPO: bountyfox/skills-pin-poc-upstream
+          POC_CURATED_DIR: /tmp/curated/my-skill
+        run: node driver.mjs
